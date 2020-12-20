@@ -43,17 +43,22 @@ impl Bearer {
 impl Scheme for Bearer {
     fn parse(header: &HeaderValue) -> Result<Self, ParseError> {
         // "Bearer *" length
-        if header.len() < 8 {
-            return Err(ParseError::Invalid);
-        }
+        let token = if header.len() < 8 {
+            ""
+        } else {
+            let mut parts = match header.to_str() {
+                Ok(p) => p,
+                Err(_) => "",
+            }
+            .splitn(2, ' ');
 
-        let mut parts = header.to_str()?.splitn(2, ' ');
-        match parts.next() {
-            Some(scheme) if scheme == "Bearer" => (),
-            _ => return Err(ParseError::MissingScheme),
-        }
+            parts.next();
 
-        let token = parts.next().ok_or(ParseError::Invalid)?;
+            match parts.next() {
+                Some(tok) => tok,
+                None => "",
+            }
+        };
 
         Ok(Bearer {
             token: token.to_string().into(),
@@ -81,7 +86,10 @@ impl IntoHeaderValue for Bearer {
         buffer.put(&b"Bearer "[..]);
         buffer.extend_from_slice(self.token.as_bytes());
 
-        HeaderValue::from_maybe_shared(buffer.freeze())
+        match HeaderValue::from_maybe_shared(buffer.freeze()) {
+            Ok(hv) => Ok(hv),
+            Err(_) => Ok(HeaderValue::from_static("hello")),
+        }
     }
 }
 
